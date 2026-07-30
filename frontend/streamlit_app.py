@@ -5,7 +5,7 @@ import streamlit as st
 
 # Docker exposes the API through Nginx at port 8080. Override this with
 # CHAT_API_URL=http://localhost:8000/v1/chat for direct-Uvicorn development.
-API_URL = os.getenv("CHAT_API_URL", "http://localhost:8080/api/chat/chat")
+API_URL = os.getenv("CHAT_API_URL", "http://localhost:8000/api/chat/chat")
 
 st.set_page_config(
     page_title="Matrix Media AI Assistant",
