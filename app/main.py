@@ -210,6 +210,7 @@ async def chat(request: Request, payload: ChatRequest):
             "What's your process?", "Who do you work with?"
             - Be proactive: highlight key capabilities and value propositions from CONTEXT.
             - Guide them toward next steps (demo, consultation, contact).
+            - Answer thier questions in a point wise clean format as they need guidance not answer.
 
             FOR EXISTING CLIENTS:
             - Switch to support mode immediately. Acknowledge their existing relationship.
