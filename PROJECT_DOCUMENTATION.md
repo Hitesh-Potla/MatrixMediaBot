@@ -75,7 +75,7 @@ Each chunk stores metadata including:
 
 ### Local embedding and storage
 
-The `BAAI/bge-base-en-v1.5` embedding model runs locally through FastEmbed. It creates vectors once during ingestion and uses the same model to embed each visitor question. Vectors are persisted in ChromaDB under `storage/chroma`; chunk metadata is stored in `storage/index.json`.
+The `BAAI/bge-small-en-v1.5` embedding model runs locally through FastEmbed. It creates vectors once during ingestion and uses the same model to embed each visitor question. Vectors are persisted in ChromaDB under `storage/chroma`; chunk metadata is stored in `storage/index.json`.
 
 ## Request flow
 
@@ -109,7 +109,7 @@ This combination performs more reliably than vector search alone when visitors p
 |---|---|---|
 | Request classification | Groq lightweight model | Deterministic JSON route, low token limit |
 | Answer generation | Groq `llama-3.1-8b-instant` | Temperature `0.1`, top-p `0.3`, maximum 300 tokens |
-| Query and document embeddings | `BAAI/bge-base-en-v1.5` | Local FastEmbed model |
+| Query and document embeddings | `BAAI/bge-small-en-v1.5` | Local FastEmbed model |
 | Reranking | `Xenova/ms-marco-MiniLM-L-6-v2` | Local cross-encoder model |
 | Vector database | ChromaDB | Local persistent storage |
 

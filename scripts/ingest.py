@@ -197,7 +197,7 @@ def main():
     args = parser.parse_args()
     if not 32 <= args.target_chunk_tokens <= args.max_chunk_tokens:
         raise SystemExit("target-chunk-tokens must be at least 32 and no greater than max-chunk-tokens.")
-    model = TextEmbedding(model_name="BAAI/bge-base-en-v1.5", cache_dir=args.cache_dir,
+    model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", cache_dir=args.cache_dir,
                           local_files_only=not args.download_model)
     # Download/cache the local cross-encoder during setup/build. It is used only
     # at query time to rerank the small hybrid candidate set.
@@ -251,7 +251,7 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps({
         "index_version": 3,
-        "embedding_model": "BAAI/bge-base-en-v1.5",
+        "embedding_model": "BAAI/bge-small-en-v1.5",
         "chunking": {
             "strategy": "semantic_sentence_boundary",
             "target_content_tokens": args.target_chunk_tokens,

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     index_path: str = "storage/index.json"
     chroma_path: str = "storage/chroma"
     chroma_collection: str = "matrix_media"
-    embedding_model: str = "BAAI/bge-base-en-v1.5"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
     reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
     reranker_candidate_count: int = 18
     retrieval_top_k: int = 5

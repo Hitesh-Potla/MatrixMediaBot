@@ -19,7 +19,6 @@ from app.config import get_settings
 from app.followups import FollowUpStore, redact_contact_details
 from app.guardrails import ChatRequest, safe_output
 from app.retrieval import Retriever
-from app.cache import PrefixCache
 
 log = logging.getLogger(__name__)
 settings = get_settings()
@@ -46,7 +45,6 @@ async def lifespan(app: FastAPI):
     app.state.groq = AsyncGroq(api_key=settings.groq_api_key) if settings.groq_api_key else None
     app.state.follow_ups = FollowUpStore(settings.follow_up_database_path, settings.follow_up_retention_days)
     app.state.chat_history = OrderedDict()
-    app.state.prefix_cache = PrefixCache(max_size=1000)
     yield
 
 
@@ -117,7 +115,8 @@ async def classify_query(request: Request, message: str) -> str:
     client = request.app.state.groq
     if client is None:
         return "rag"
-    prompt = f"""Classify this website visitor message into exactly one route.
+    
+    system_prompt = """You are a strict request router. Classify this website visitor message into exactly one route.
 
 Routes:
 - rag: a question answerable from Matrix Media's public website content.
@@ -128,14 +127,13 @@ Routes:
 
 Assume every visitor is a current or prospective client unless their message is clearly career-related.
 Only choose career when the message explicitly concerns employment or recruitment. Never choose career for a greeting.
-Choose rag when unsure. Do not answer the message. Return JSON only: {{"route":"rag|escalation|support|career"}}.
+Choose rag when unsure. Do not answer the message. Return JSON only: {"route":"rag|escalation|support|career"}."""
 
-MESSAGE: {message}"""
     try:
         completion = await asyncio.wait_for(client.chat.completions.create(
             model=settings.groq_classifier_model or settings.groq_model,
-            messages=[{"role": "system", "content": "You are a strict request router. Return JSON only."},
-                      {"role": "user", "content": prompt}],
+            messages=[{"role": "system", "content": system_prompt},
+                      {"role": "user", "content": f"MESSAGE: {message}"}],
             temperature=0, top_p=0.1, max_tokens=30,
             response_format={"type": "json_object"},
         ), timeout=3)
@@ -156,16 +154,6 @@ async def chat(request: Request, payload: ChatRequest):
         return {"answer": "We will get back to you.", "sources": [], "mode": "contact_saved", "route": "escalation", "follow_up_saved": True}
     model_message = redact_contact_details(payload.message)
     route = await classify_query(request, model_message)
-    
-    # Check prefix cache for RAG questions
-    if route == "rag":
-        cached_response = request.app.state.prefix_cache.search_prefix(model_message)
-        if cached_response:
-            if payload.conversation_id:
-                update_chat_history(request.app, payload.conversation_id, model_message, cached_response["answer"])
-            return {"answer": cached_response["answer"], "sources": cached_response["sources"], 
-                    "mode": "prefix_cache", "route": route, "follow_up_saved": follow_up_saved}
-
     # Guard against an occasional classifier mistake: greetings must never retrieve
     # arbitrary business/career content and are always welcomed as client visitors.
     if is_simple_greeting(model_message):
@@ -221,13 +209,17 @@ async def chat(request: Request, payload: ChatRequest):
         ), timeout=8)
         answer = safe_output(completion.choices[0].message.content or "")
         
+        cached_tokens = 0
+        if completion.usage:
+            prompt_details = getattr(completion.usage, 'prompt_tokens_details', None)
+            if prompt_details:
+                cached_tokens = getattr(prompt_details, 'cached_tokens', 0)
+        
         if payload.conversation_id:
             update_chat_history(request.app, payload.conversation_id, model_message, answer)
             
-        request.app.state.prefix_cache.insert(model_message, answer, sources)
-            
         return {"answer": answer, "sources": sources, "mode": "generated", "route": route,
-                "follow_up_saved": follow_up_saved}
+                "follow_up_saved": follow_up_saved, "cached_tokens": cached_tokens}
     except Exception:
         log.exception("Groq unavailable; returning deterministic retrieval answer")
         return {"answer": deterministic_answer(chunks), "sources": sources,
