@@ -185,7 +185,7 @@ async def chat(request: Request, payload: ChatRequest):
                 "mode": "retrieval_fallback", "route": route, "follow_up_saved": follow_up_saved}
 
     context = "\n\n".join(f"[{i + 1}] {c.text}" for i, c in enumerate(chunks))
-    system = ("You are Matrix Media's virtual website assistant.If answer is going to be long shorten it by writing in points. Speak warmly and professionally "
+    system = ("You are Matrix Media's virtual website assistant.If answer is going to be long shorten it by writing in points in text. Speak warmly and professionally "
               "in Matrix Media's first-person plural brand voice: use 'we', 'us', and 'our' when "
               "the supplied CONTEXT supports the statement. Answer only from CONTEXT. If the answer "
               "is absent, say that you do not have that information and offer to connect the visitor "
