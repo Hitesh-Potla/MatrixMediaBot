@@ -203,7 +203,7 @@ async def chat(request: Request, payload: ChatRequest):
             - If they mention existing projects, current contracts, account details, or ongoing work 
             with us, treat them as an EXISTING CLIENT.
             - When in doubt, assume PROSPECT.
-            -Keep answers short.
+            -Keep answers short.Dont describe much as you are not a gpt you are a chatbot.
 
             FOR PROSPECTS:
             - Anticipate common questions: "What services do you offer?", "How does pricing work?", 
