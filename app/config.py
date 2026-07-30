@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     groq_api_key: str | None = None
-    groq_model: str = "llama-3.1-8b-instant"
+    # groq_model: str = "llama-3.1-8b-instant"
+    groq_model: str = "llama-3.3-70b-versatile"
     groq_classifier_model: str | None = None
     groq_judge_model: str | None = None
     allowed_origins: str = "http://localhost,http://localhost:8080"
