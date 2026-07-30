@@ -80,14 +80,4 @@ No API key belongs in PHP, JavaScript, or WordPress settings.
 
 For production, terminate TLS at your existing WordPress proxy, set exact `ALLOWED_ORIGINS`, put the service on a private network, and send only health/error metrics (never questions or document text) to monitoring.
 
-## Accuracy evaluation
 
-After the service and local index are running, use Groq as a strict answer judge:
-
-```sh
-python tester.py
-```
-
-It calls the API for each case in `eval_cases.json`, checks expected source retrieval and response mode, then asks Groq to score answer grounding, correctness, and Matrix Media brand voice using only the chunks cited by the API. Review `evaluation_report.json`; add reviewed real-world questions and expected sources to `eval_cases.json` before launch.
-
-When running FastAPI directly rather than Docker, use `python tester.py --endpoint http://127.0.0.1:8000/v1/chat`.
