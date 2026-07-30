@@ -7,6 +7,8 @@ import streamlit as st
 # Docker exposes the API through Nginx at port 8080. Override this with
 # CHAT_API_URL=http://localhost:8000/v1/chat for direct-Uvicorn development.
 API_URL = os.getenv("CHAT_API_URL", "http://localhost:8080/api/chat/chat")
+AUTH_REQUEST_URL = API_URL.rsplit("/", 1)[0] + "/auth/request-otp"
+AUTH_VERIFY_URL = API_URL.rsplit("/", 1)[0] + "/auth/verify-otp"
 
 st.set_page_config(
     page_title="Matrix Media AI Assistant",
@@ -247,144 +249,206 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.conversation_id = uuid.uuid4().hex
+    st.session_state.authenticated = False
+    st.session_state.otp_sent = False
+    st.session_state.contact = ""
+    st.session_state.name = ""
 
-# Display chat history
-chat_container = st.container()
-with chat_container:
-    for msg in st.session_state.messages:
-        if msg["role"] == "user":
-            st.markdown(f"""
-            <div class="user-message">
-                <div class="message-bubble user-bubble">
-                    {msg["content"]}
-                </div>
+if not st.session_state.authenticated:
+    st.markdown("""
+    <div class="chat-container">
+        <div class="assistant-message">
+            <div class="message-bubble assistant-bubble">
+                Please verify your contact details to start chatting.
             </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="assistant-message">
-                <div class="message-bubble assistant-bubble">
-                    {msg["content"]}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-# Add spacing for fixed input
-st.markdown('<div class="chat-bottom-padding"></div>', unsafe_allow_html=True)
-
-# Chat input and processing
-if prompt := st.chat_input("Type your question here...", key="chat_input"):
-    
-    # Add user message to history
-    st.session_state.messages.append({
-        "role": "user",
-        "content": prompt
-    })
-    
-    # Display user message
-    st.markdown(f"""
-    <div class="user-message">
-        <div class="message-bubble user-bubble">
-            {prompt}
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Create placeholder for assistant response
-    response_placeholder = st.empty()
-    badge_placeholder = st.empty()
-    
-    with response_placeholder.container():
-        st.markdown("""
-        <div class="assistant-message">
-            <div class="message-bubble assistant-bubble">
-                <div class="loading-dots">
-                    <div class="loading-dot"></div>
-                    <div class="loading-dot"></div>
-                    <div class="loading-dot"></div>
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if not st.session_state.otp_sent:
+            with st.form("auth_form"):
+                name = st.text_input("Name")
+                contact = st.text_input("Email or Phone Number")
+                submit = st.form_submit_button("Get OTP", use_container_width=True)
+                
+                if submit:
+                    if not name or not contact:
+                        st.error("Please enter both Name and Contact details.")
+                    else:
+                        with st.spinner("Sending OTP..."):
+                            try:
+                                resp = requests.post(AUTH_REQUEST_URL, json={"name": name, "contact": contact}, timeout=10)
+                                if resp.status_code == 200:
+                                    st.session_state.otp_sent = True
+                                    st.session_state.contact = contact
+                                    st.session_state.name = name
+                                    st.success("OTP sent! Please check your server logs (for mock OTP).")
+                                    st.rerun()
+                                else:
+                                    st.error(f"Error: {resp.text}")
+                            except Exception as e:
+                                st.error(f"Connection Error: {e}")
+        else:
+            with st.form("verify_form"):
+                st.info(f"OTP sent to {st.session_state.contact}")
+                otp = st.text_input("Enter 6-digit OTP")
+                verify = st.form_submit_button("Verify OTP", use_container_width=True)
+                
+                if verify:
+                    if not otp:
+                        st.error("Please enter the OTP.")
+                    else:
+                        with st.spinner("Verifying..."):
+                            try:
+                                resp = requests.post(AUTH_VERIFY_URL, json={"contact": st.session_state.contact, "otp": otp}, timeout=10)
+                                if resp.status_code == 200:
+                                    st.session_state.authenticated = True
+                                    st.rerun()
+                                else:
+                                    st.error("Invalid or expired OTP.")
+                            except Exception as e:
+                                st.error(f"Connection Error: {e}")
+
+else:
+    # Display chat history
+    chat_container = st.container()
+    with chat_container:
+        for msg in st.session_state.messages:
+            if msg["role"] == "user":
+                st.markdown(f"""
+                <div class="user-message">
+                    <div class="message-bubble user-bubble">
+                        {msg["content"]}
+                    </div>
                 </div>
-                <span style="margin-left: 0.5rem; color: #94a3b8;">Searching knowledge base...</span>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="assistant-message">
+                    <div class="message-bubble assistant-bubble">
+                        {msg["content"]}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # Add spacing for fixed input
+    st.markdown('<div class="chat-bottom-padding"></div>', unsafe_allow_html=True)
+
+    # Chat input and processing
+    if prompt := st.chat_input("Type your question here...", key="chat_input"):
+        
+        # Add user message to history
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        
+        # Display user message
+        st.markdown(f"""
+        <div class="user-message">
+            <div class="message-bubble user-bubble">
+                {prompt}
             </div>
         </div>
         """, unsafe_allow_html=True)
-    
-    start = time.time()
-    
-    try:
-        response = requests.post(
-            API_URL,
-            json={"message": prompt, "conversation_id": st.session_state.conversation_id},
-            headers={
-                "ngrok-skip-browser-warning": "true",
-                "User-Agent": "PostmanRuntime/7.32.3"
-            },
-            timeout=30
-        )
         
-        elapsed = time.time() - start
-        data = response.json()
-        answer = data.get("answer", "Unable to retrieve answer")
-        sources = data.get("sources", [])
+        # Create placeholder for assistant response
+        response_placeholder = st.empty()
+        badge_placeholder = st.empty()
         
-        # Update response
-        with response_placeholder.container():
-            st.markdown(f"""
-            <div class="assistant-message">
-                <div class="message-bubble assistant-bubble">
-                    {answer}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Show response time badge
-        with badge_placeholder.container():
-            st.markdown(f"""
-            <div class="assistant-message">
-                <div class="response-badge">⏱️ Response time: {elapsed:.2f}s</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Save to session
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": answer
-        })
-        
-        # Rerun to update UI
-        st.rerun()
-        
-    except requests.exceptions.Timeout:
         with response_placeholder.container():
             st.markdown("""
             <div class="assistant-message">
                 <div class="message-bubble assistant-bubble">
-                    <strong>⚠️ Request Timeout</strong><br>
-                    The server took too long to respond. Please try again.
+                    <div class="loading-dots">
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                    </div>
+                    <span style="margin-left: 0.5rem; color: #94a3b8;">Searching knowledge base...</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-    
-    except requests.exceptions.ConnectionError:
-        with response_placeholder.container():
-            st.markdown("""
-            <div class="assistant-message">
-                <div class="message-bubble assistant-bubble">
-                    <strong>❌ Connection Error</strong><br>
-                    Unable to connect to the chatbot service. Please check if the server is running.
+        
+        start = time.time()
+        
+        try:
+            response = requests.post(
+                API_URL,
+                json={"message": prompt, "conversation_id": st.session_state.conversation_id},
+                headers={
+                    "ngrok-skip-browser-warning": "true",
+                    "User-Agent": "PostmanRuntime/7.32.3"
+                },
+                timeout=30
+            )
+            
+            elapsed = time.time() - start
+            data = response.json()
+            answer = data.get("answer", "Unable to retrieve answer")
+            sources = data.get("sources", [])
+            
+            # Update response
+            with response_placeholder.container():
+                st.markdown(f"""
+                <div class="assistant-message">
+                    <div class="message-bubble assistant-bubble">
+                        {answer}
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    except Exception as e:
-        with response_placeholder.container():
-            st.markdown(f"""
-            <div class="assistant-message">
-                <div class="message-bubble assistant-bubble">
-                    <strong>❌ Error</strong><br>
-                    {str(e)}
+                """, unsafe_allow_html=True)
+            
+            # Show response time badge
+            with badge_placeholder.container():
+                st.markdown(f"""
+                <div class="assistant-message">
+                    <div class="response-badge">⏱️ Response time: {elapsed:.2f}s</div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+            
+            # Save to session
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": answer
+            })
+            
+            # Rerun to update UI
+            st.rerun()
+            
+        except requests.exceptions.Timeout:
+            with response_placeholder.container():
+                st.markdown("""
+                <div class="assistant-message">
+                    <div class="message-bubble assistant-bubble">
+                        <strong>⚠️ Request Timeout</strong><br>
+                        The server took too long to respond. Please try again.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        except requests.exceptions.ConnectionError:
+            with response_placeholder.container():
+                st.markdown("""
+                <div class="assistant-message">
+                    <div class="message-bubble assistant-bubble">
+                        <strong>❌ Connection Error</strong><br>
+                        Unable to connect to the chatbot service. Please check if the server is running.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        except Exception as e:
+            with response_placeholder.container():
+                st.markdown(f"""
+                <div class="assistant-message">
+                    <div class="message-bubble assistant-bubble">
+                        <strong>❌ Error</strong><br>
+                        {str(e)}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
 # Sidebar
 with st.sidebar:
@@ -393,6 +457,10 @@ with st.sidebar:
     if st.button("🗑️ Clear Conversation", use_container_width=True, key="clear_btn"):
         st.session_state.messages = []
         st.session_state.conversation_id = uuid.uuid4().hex
+        st.session_state.authenticated = False
+        st.session_state.otp_sent = False
+        st.session_state.contact = ""
+        st.session_state.name = ""
         st.rerun()
     
     st.markdown("---")

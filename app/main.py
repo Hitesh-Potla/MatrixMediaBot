@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 import re
+import random
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from collections import OrderedDict
@@ -18,6 +20,7 @@ from slowapi.util import get_remote_address
 from app.config import get_settings
 from app.followups import FollowUpStore, redact_contact_details
 from app.guardrails import ChatRequest, safe_output
+from pydantic import BaseModel
 from app.retrieval import Retriever
 
 log = logging.getLogger(__name__)
@@ -45,6 +48,7 @@ async def lifespan(app: FastAPI):
     app.state.groq = AsyncGroq(api_key=settings.groq_api_key) if settings.groq_api_key else None
     app.state.follow_ups = FollowUpStore(settings.follow_up_database_path, settings.follow_up_retention_days)
     app.state.chat_history = OrderedDict()
+    app.state.otps = {}
     yield
 
 
@@ -142,6 +146,48 @@ Choose rag when unsure. Do not answer the message. Return JSON only: {"route":"r
     except Exception:
         log.warning("Query classifier unavailable; continuing with RAG", exc_info=True)
         return "rag"
+
+
+class OTPRequest(BaseModel):
+    name: str
+    contact: str
+
+class OTPVerify(BaseModel):
+    contact: str
+    otp: str
+
+@app.post("/v1/auth/request-otp")
+async def request_otp(request: Request, payload: OTPRequest):
+    otp = str(random.randint(100000, 999999))
+    expires_at = time.time() + 300 # 5 minutes
+    
+    # Store the OTP
+    request.app.state.otps[payload.contact] = {
+        "otp": otp,
+        "expires_at": expires_at,
+        "name": payload.name
+    }
+    
+    # Log the OTP for testing purposes
+    log.info(f"Generated OTP {otp} for {payload.contact}")
+    
+    return {"message": "OTP sent successfully (check server logs for mock OTP)"}
+
+@app.post("/v1/auth/verify-otp")
+async def verify_otp(request: Request, payload: OTPVerify):
+    otp_data = request.app.state.otps.get(payload.contact)
+    if not otp_data:
+        raise HTTPException(status_code=400, detail="No OTP requested for this contact.")
+        
+    if time.time() > otp_data["expires_at"]:
+        del request.app.state.otps[payload.contact]
+        raise HTTPException(status_code=400, detail="OTP expired.")
+        
+    if otp_data["otp"] != payload.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP.")
+        
+    del request.app.state.otps[payload.contact]
+    return {"message": "OTP verified successfully"}
 
 
 @app.post("/v1/chat")
