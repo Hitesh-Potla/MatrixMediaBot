@@ -1,6 +1,7 @@
 import os
 import time
 import requests
+import uuid
 import streamlit as st
 
 # Docker exposes the API through Nginx at port 8080. Override this with
@@ -245,6 +246,7 @@ st.markdown("""
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    st.session_state.conversation_id = uuid.uuid4().hex
 
 # Display chat history
 chat_container = st.container()
@@ -311,7 +313,7 @@ if prompt := st.chat_input("Type your question here...", key="chat_input"):
     try:
         response = requests.post(
             API_URL,
-            json={"message": prompt},
+            json={"message": prompt, "conversation_id": st.session_state.conversation_id},
             headers={
                 "ngrok-skip-browser-warning": "true",
                 "User-Agent": "PostmanRuntime/7.32.3"
@@ -390,6 +392,7 @@ with st.sidebar:
     
     if st.button("🗑️ Clear Conversation", use_container_width=True, key="clear_btn"):
         st.session_state.messages = []
+        st.session_state.conversation_id = uuid.uuid4().hex
         st.rerun()
     
     st.markdown("---")
