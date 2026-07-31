@@ -127,9 +127,9 @@ Routes:
 - escalation: a request for a human, proposal, quote, sales conversation, custom project assessment,
   partnership, complaint, or action that requires a Matrix Media team member.
 - support: help with an existing client project, account, invoice, login, outage, urgent issue, or delivery.
-- career: a job, role, internship, recruitment, hiring, resume/CV, or employment inquiry.
+- career: a job, role, internship, recruitment, hiring, resume/CV, or employment inquiry. (Note: general questions about company size or number of employees are 'rag', not 'career').
 
-Strictly Assume every visitor is a possible lead. If the user is showing interest in joining the company based on the past 3 chats, then assume it's a career related query.
+Assume every visitor is a possible lead. If the user is showing interest in joining the company based on the past 3 chats, then assume it's a career related query.
 Only choose career when the past 3 messages explicitly concerns employment or recruitment. Never choose career for a greeting.
 Choose rag when unsure. Do not answer the message. Return JSON only: {"route":"rag|escalation|support|career"}."""
 
