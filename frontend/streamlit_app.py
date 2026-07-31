@@ -7,8 +7,7 @@ import streamlit as st
 # Docker exposes the API through Nginx at port 8080. Override this with
 # CHAT_API_URL=http://localhost:8000/v1/chat for direct-Uvicorn development.
 API_URL = os.getenv("CHAT_API_URL", "http://localhost:8080/api/chat/chat")
-AUTH_REQUEST_URL = API_URL.rsplit("/", 1)[0] + "/auth/request-otp"
-AUTH_VERIFY_URL = API_URL.rsplit("/", 1)[0] + "/auth/verify-otp"
+AUTH_START_URL = API_URL.rsplit("/", 1)[0] + "/auth/start-session"
 
 st.set_page_config(
     page_title="Matrix Media AI Assistant",
@@ -248,9 +247,8 @@ st.markdown("""
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    st.session_state.conversation_id = uuid.uuid4().hex
+    st.session_state.conversation_id = ""
     st.session_state.authenticated = False
-    st.session_state.otp_sent = False
     st.session_state.contact = ""
     st.session_state.name = ""
 
@@ -267,49 +265,29 @@ if not st.session_state.authenticated:
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if not st.session_state.otp_sent:
-            with st.form("auth_form"):
-                name = st.text_input("Name")
-                contact = st.text_input("Email or Phone Number")
-                submit = st.form_submit_button("Get OTP", use_container_width=True)
-                
-                if submit:
-                    if not name or not contact:
-                        st.error("Please enter both Name and Contact details.")
-                    else:
-                        with st.spinner("Sending OTP..."):
-                            try:
-                                resp = requests.post(AUTH_REQUEST_URL, json={"name": name, "contact": contact}, timeout=10)
-                                if resp.status_code == 200:
-                                    st.session_state.otp_sent = True
-                                    st.session_state.contact = contact
-                                    st.session_state.name = name
-                                    st.success("OTP sent! Please check your server logs (for mock OTP).")
-                                    st.rerun()
-                                else:
-                                    st.error(f"Error: {resp.text}")
-                            except Exception as e:
-                                st.error(f"Connection Error: {e}")
-        else:
-            with st.form("verify_form"):
-                st.info(f"OTP sent to {st.session_state.contact}")
-                otp = st.text_input("Enter 6-digit OTP")
-                verify = st.form_submit_button("Verify OTP", use_container_width=True)
-                
-                if verify:
-                    if not otp:
-                        st.error("Please enter the OTP.")
-                    else:
-                        with st.spinner("Verifying..."):
-                            try:
-                                resp = requests.post(AUTH_VERIFY_URL, json={"contact": st.session_state.contact, "otp": otp}, timeout=10)
-                                if resp.status_code == 200:
-                                    st.session_state.authenticated = True
-                                    st.rerun()
-                                else:
-                                    st.error("Invalid or expired OTP.")
-                            except Exception as e:
-                                st.error(f"Connection Error: {e}")
+        with st.form("auth_form"):
+            name = st.text_input("Name")
+            contact = st.text_input("Email or Phone Number")
+            submit = st.form_submit_button("Start Session", use_container_width=True)
+            
+            if submit:
+                if not name or not contact:
+                    st.error("Please enter both Name and Contact details.")
+                else:
+                    with st.spinner("Starting session..."):
+                        try:
+                            resp = requests.post(AUTH_START_URL, json={"name": name, "contact": contact}, timeout=10)
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                st.session_state.authenticated = True
+                                st.session_state.contact = contact
+                                st.session_state.name = name
+                                st.session_state.conversation_id = data.get("conversation_id", "")
+                                st.rerun()
+                            else:
+                                st.error(f"Error: {resp.text}")
+                        except Exception as e:
+                            st.error(f"Connection Error: {e}")
 
 else:
     # Display chat history
@@ -385,6 +363,13 @@ else:
                 timeout=30
             )
             
+            if response.status_code == 401:
+                st.session_state.authenticated = False
+                st.session_state.messages = []
+                st.session_state.conversation_id = ""
+                st.rerun()
+                st.stop()
+                
             elapsed = time.time() - start
             data = response.json()
             answer = data.get("answer", "Unable to retrieve answer")
@@ -456,9 +441,8 @@ with st.sidebar:
     
     if st.button("🗑️ Clear Conversation", use_container_width=True, key="clear_btn"):
         st.session_state.messages = []
-        st.session_state.conversation_id = uuid.uuid4().hex
+        st.session_state.conversation_id = ""
         st.session_state.authenticated = False
-        st.session_state.otp_sent = False
         st.session_state.contact = ""
         st.session_state.name = ""
         st.rerun()

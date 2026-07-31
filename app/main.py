@@ -4,6 +4,7 @@ import logging
 import re
 import random
 import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from collections import OrderedDict
@@ -48,7 +49,7 @@ async def lifespan(app: FastAPI):
     app.state.groq = AsyncGroq(api_key=settings.groq_api_key) if settings.groq_api_key else None
     app.state.follow_ups = FollowUpStore(settings.follow_up_database_path, settings.follow_up_retention_days)
     app.state.chat_history = OrderedDict()
-    app.state.otps = {}
+    app.state.sessions = {}
     yield
 
 
@@ -153,51 +154,35 @@ Choose rag when unsure. Do not answer the message. Return JSON only: {"route":"r
         return "rag"
 
 
-class OTPRequest(BaseModel):
+class SessionStartRequest(BaseModel):
     name: str
     contact: str
 
-class OTPVerify(BaseModel):
-    contact: str
-    otp: str
-
-@app.post("/v1/auth/request-otp")
-async def request_otp(request: Request, payload: OTPRequest):
-    otp = "123456"  # Hardcoded for easier testing
-    expires_at = time.time() + 300 # 5 minutes
-    
-    # Store the OTP
-    request.app.state.otps[payload.contact] = {
-        "otp": otp,
-        "expires_at": expires_at,
-        "name": payload.name
+@app.post("/v1/auth/start-session")
+async def start_session(request: Request, payload: SessionStartRequest):
+    conversation_id = uuid.uuid4().hex
+    # Store session start time
+    request.app.state.sessions[conversation_id] = {
+        "started_at": time.time(),
+        "name": payload.name,
+        "contact": payload.contact
     }
-    
-    # Log the OTP for testing purposes
-    log.info(f"Generated OTP {otp} for {payload.contact}")
-    
-    return {"message": "OTP sent successfully (Hardcoded to 123456)"}
-
-@app.post("/v1/auth/verify-otp")
-async def verify_otp(request: Request, payload: OTPVerify):
-    otp_data = request.app.state.otps.get(payload.contact)
-    if not otp_data:
-        raise HTTPException(status_code=400, detail="No OTP requested for this contact.")
-        
-    if time.time() > otp_data["expires_at"]:
-        del request.app.state.otps[payload.contact]
-        raise HTTPException(status_code=400, detail="OTP expired.")
-        
-    if otp_data["otp"] != payload.otp:
-        raise HTTPException(status_code=400, detail="Invalid OTP.")
-        
-    del request.app.state.otps[payload.contact]
-    return {"message": "OTP verified successfully"}
+    log.info(f"Started new session {conversation_id} for {payload.contact}")
+    return {"message": "Session started", "conversation_id": conversation_id}
 
 
 @app.post("/v1/chat")
 @limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def chat(request: Request, payload: ChatRequest):
+    if payload.conversation_id:
+        session_info = request.app.state.sessions.get(payload.conversation_id)
+        if not session_info or time.time() - session_info["started_at"] > 300: # 5 minutes limit
+            # Clean up history and session
+            if payload.conversation_id in request.app.state.chat_history:
+                del request.app.state.chat_history[payload.conversation_id]
+            if payload.conversation_id in request.app.state.sessions:
+                del request.app.state.sessions[payload.conversation_id]
+            raise HTTPException(status_code=401, detail="Session expired. Please start a new session.")
     # Store only after the visitor explicitly asks to be contacted and supplies a
     # contact method. The model receives a redacted copy of that same message.
     follow_up_saved = await run_in_threadpool(request.app.state.follow_ups.save_if_requested, payload.message)
