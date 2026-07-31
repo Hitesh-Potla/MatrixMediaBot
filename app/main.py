@@ -251,7 +251,7 @@ async def chat(request: Request, payload: ChatRequest):
         completion = await asyncio.wait_for(request.app.state.groq.chat.completions.create(
             model=settings.groq_model,
             messages=messages_payload,
-            temperature=0.15, top_p=0.3, presence_penalty=0, frequency_penalty=0,
+            temperature=0.25, top_p=0.3, presence_penalty=0, frequency_penalty=0,
             max_tokens=100,
         ), timeout=8)
         answer = safe_output(completion.choices[0].message.content or "")
