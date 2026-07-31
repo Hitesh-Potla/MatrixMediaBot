@@ -158,7 +158,7 @@ class OTPVerify(BaseModel):
 
 @app.post("/v1/auth/request-otp")
 async def request_otp(request: Request, payload: OTPRequest):
-    otp = str(random.randint(100000, 999999))
+    otp = "123456"  # Hardcoded for easier testing
     expires_at = time.time() + 300 # 5 minutes
     
     # Store the OTP
@@ -171,7 +171,7 @@ async def request_otp(request: Request, payload: OTPRequest):
     # Log the OTP for testing purposes
     log.info(f"Generated OTP {otp} for {payload.contact}")
     
-    return {"message": "OTP sent successfully (check server logs for mock OTP)"}
+    return {"message": "OTP sent successfully (Hardcoded to 123456)"}
 
 @app.post("/v1/auth/verify-otp")
 async def verify_otp(request: Request, payload: OTPVerify):
@@ -250,8 +250,8 @@ async def chat(request: Request, payload: ChatRequest):
         completion = await asyncio.wait_for(request.app.state.groq.chat.completions.create(
             model=settings.groq_model,
             messages=messages_payload,
-            temperature=0.2, top_p=0.3, presence_penalty=0, frequency_penalty=0,
-            max_tokens=300,
+            temperature=0.15, top_p=0.3, presence_penalty=0, frequency_penalty=0,
+            max_tokens=150,
         ), timeout=8)
         answer = safe_output(completion.choices[0].message.content or "")
         
