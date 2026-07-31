@@ -196,6 +196,15 @@ async def chat(request: Request, payload: ChatRequest):
         return {"answer": settings.client_greeting_message, "sources": [],
                 "mode": "client_greeting", "route": "client_greeting", "follow_up_saved": follow_up_saved}
     if route == "escalation":
+        if payload.conversation_id:
+            session_info = request.app.state.sessions.get(payload.conversation_id)
+            if session_info and not follow_up_saved:
+                follow_up_saved = await run_in_threadpool(
+                    request.app.state.follow_ups.save_escalation,
+                    session_info["name"],
+                    session_info["contact"],
+                    payload.message
+                )
         return {"answer": settings.escalation_message, "sources": [], "mode": "escalation", "route": route,
                 "follow_up_saved": follow_up_saved}
     if route == "support":

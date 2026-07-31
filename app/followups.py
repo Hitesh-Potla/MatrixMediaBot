@@ -127,6 +127,26 @@ class FollowUpStore:
         )
         return True
 
+    def save_escalation(self, name: str, contact: str, message: str) -> bool:
+        email, phone, website = extract_contact_details(contact)
+        if not email and not phone and not website:
+            message = f"Contact provided: {contact}\nMessage: {message}"
+        
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(days=self.retention_days)
+        with self._connect() as connection:
+            connection.execute("DELETE FROM follow_ups WHERE expires_at < ?", (now.isoformat(),))
+            cursor = connection.execute(
+                "INSERT INTO follow_ups(created_at, expires_at, name, email, phone, website, message) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (now.isoformat(), expires_at.isoformat(), name, email, phone, website, message[:2000]),
+            )
+        print(
+            "Escalation follow-up saved: "
+            f"id={cursor.lastrowid} name={bool(name)} contact_provided={bool(contact)}",
+            flush=True,
+        )
+        return True
+
     def list_recent(self, limit: int = 100) -> list[dict]:
         with self._connect() as connection:
             rows = connection.execute(

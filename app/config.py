@@ -30,9 +30,7 @@ class Settings(BaseSettings):
     embedding_cache_path: str = "storage/fastembed"
     # The model is downloaded at build/setup time; serving must not depend on internet access.
     embedding_local_files_only: bool = True
-    escalation_message: str = (
-        "This is best handled by a Matrix Media specialist. Contact us at contact@matrixnmedia.com or +91-33-4849 0807 so we can help directly."
-    )
+    escalation_message: str = "We will contact you soon."
     support_message: str = (
         "For help with an existing Matrix Media engagement, contact our support team at contact@matrixnmedia.com or +91-33-4849 0807 so they can access the right details."
     )
