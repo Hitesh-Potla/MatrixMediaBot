@@ -114,7 +114,7 @@ def is_career_message(message: str) -> bool:
     return bool(CAREER_SIGNAL.search(message))
 
 
-async def classify_query(request: Request, message: str) -> str:
+async def classify_query(request: Request, message: str, conversation_id: str | None = None) -> str:
     """Route a request before retrieval; failures intentionally preserve RAG access."""
     client = request.app.state.groq
     if client is None:
@@ -129,15 +129,20 @@ Routes:
 - support: help with an existing client project, account, invoice, login, outage, urgent issue, or delivery.
 - career: a job, role, internship, recruitment, hiring, resume/CV, or employment inquiry.
 
-Assume every visitor is a current or prospective client unless their message is clearly career-related.
-Only choose career when the message explicitly concerns employment or recruitment. Never choose career for a greeting.
+Assume every visitor is a possible lead. If the user is showing interest in joining the company based on the past 3 chats, then assume it's a career related query.
+Only choose career when the message or recent context explicitly concerns employment or recruitment. Never choose career for a greeting.
 Choose rag when unsure. Do not answer the message. Return JSON only: {"route":"rag|escalation|support|career"}."""
+
+    messages = [{"role": "system", "content": system_prompt}]
+    if conversation_id:
+        history = request.app.state.chat_history.get(conversation_id, [])[-6:]
+        messages.extend(history)
+    messages.append({"role": "user", "content": f"MESSAGE: {message}"})
 
     try:
         completion = await asyncio.wait_for(client.chat.completions.create(
             model=settings.groq_classifier_model or settings.groq_model,
-            messages=[{"role": "system", "content": system_prompt},
-                      {"role": "user", "content": f"MESSAGE: {message}"}],
+            messages=messages,
             temperature=0, top_p=0.1, max_tokens=30,
             response_format={"type": "json_object"},
         ), timeout=3)
@@ -199,7 +204,7 @@ async def chat(request: Request, payload: ChatRequest):
     if follow_up_saved:
         return {"answer": "We will get back to you.", "sources": [], "mode": "contact_saved", "route": "escalation", "follow_up_saved": True}
     model_message = redact_contact_details(payload.message)
-    route = await classify_query(request, model_message)
+    route = await classify_query(request, model_message, payload.conversation_id)
     # Guard against an occasional classifier mistake: greetings must never retrieve
     # arbitrary business/career content and are always welcomed as client visitors.
     if is_simple_greeting(model_message):
