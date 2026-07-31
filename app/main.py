@@ -129,8 +129,8 @@ Routes:
 - support: help with an existing client project, account, invoice, login, outage, urgent issue, or delivery.
 - career: a job, role, internship, recruitment, hiring, resume/CV, or employment inquiry.
 
-Assume every visitor is a possible lead. If the user is showing interest in joining the company based on the past 3 chats, then assume it's a career related query.
-Only choose career when the message or recent context explicitly concerns employment or recruitment. Never choose career for a greeting.
+Strictly Assume every visitor is a possible lead. If the user is showing interest in joining the company based on the past 3 chats, then assume it's a career related query.
+Only choose career when the past 3 messages explicitly concerns employment or recruitment. Never choose career for a greeting.
 Choose rag when unsure. Do not answer the message. Return JSON only: {"route":"rag|escalation|support|career"}."""
 
     messages = [{"role": "system", "content": system_prompt}]
