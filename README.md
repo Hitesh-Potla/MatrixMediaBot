@@ -51,6 +51,9 @@ CHAT_API_URL=http://localhost:8000/v1/chat streamlit run frontend/streamlit_app.
 The supplied source files are already included in the Docker build context. Set the key in `.env`, then run:
 
 ```sh
+export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
+which docker-credential-desktop
+
 docker compose up --build -d
 ```
 
